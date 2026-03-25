@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeagueApps Org Chart</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f1f5f9;
+  color: #1e293b;
+  height: 100vh;
+  overflow: hidden;
+}
+.header {
+  background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%);
+  color: white;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  position: relative;
+  z-index: 10;
+}
+.header-left h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.header-left .meta { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+.header-right { display: flex; gap: 10px; align-items: center; }
+.header-btn {
+  padding: 7px 14px;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex; align-items: center; gap: 6px;
+  transition: background 0.15s;
+}
+.header-btn:hover { background: rgba(255,255,255,0.25); }
+.controls {
+  background: white;
+  padding: 9px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 5;
+}
+.search-wrap { position: relative; }
+.search-icon {
+  position: absolute; left: 10px; top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #94a3b8;
+  font-size: 14px;
+}
+#search {
+  padding: 7px 12px 7px 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  width: 240px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#search:focus {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(29,78,216,0.12);
+}
+.ctrl-btn {
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.ctrl-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+.emp-count {
+  margin-left: auto;
+  background: #f1f5f9;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+.legend-bar {
+  background: white;
+  padding: 7px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  position: relative;
+  z-index: 5;
+}
+.legend-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 4px; }
+.legend-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; cursor: pointer;
+  padding: 2px 8px; border-radius: 20px;
+  border: 1.5px solid transparent;
+  transition: all 0.15s;
+  color: #374151;
+  font-weight: 500;
+}
+.legend-item:hover { background: #f8fafc; }
+.legend-item.active { color: white !important; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+#chart {
+  width: 100%;
+  height: calc(100vh - 155px);
+  overflow: hidden;
+  background: #f8fafc;
+  background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+  background-size: 28px 28px;
+  position: relative;
+}
+svg { display: block; }
+.node { cursor: pointer; }
+.node rect {
+  transition: filter 0.2s;
+}
+.node:hover rect {
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.18)) !important;
+}
+.node.dimmed { opacity: 0.1; pointer-events: none; }
+.node.search-match rect { stroke-width: 3 !important; }
+.link {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 1.5;
+}
+.link.dimmed { opacity: 0.05; }
+#tooltip {
+  position: fixed;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  pointer-events: none;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+  z-index: 9999;
+  max-width: 250px;
+  display: none;
+}
+.tt-name { font-weight: 700; font-size: 14px; color: #1e293b; margin-bottom: 3px; }
+.tt-title { color: #64748b; font-size: 12px; margin-bottom: 8px; line-height: 1.4; }
+.tt-dept { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; color: white; letter-spacing: 0.02em; }
+.tt-detail { color: #94a3b8; font-size: 11px; margin-top: 6px; }
+.tt-reports { color: #64748b; font-size: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 100;
+}
+.zoom-btn {
+  width: 34px; height: 34px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  color: #374151;
+  transition: all 0.15s;
+}
+.zoom-btn:hover { background: #f1f5f9; box-shadow: 0 3px 10px rgba(0,0,0,0.12); }
+.note-banner {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: #64748b;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+@media print {
+  .controls, .legend-bar, .zoom-controls, .note-banner { display: none !important; }
+  .header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  #chart { height: auto; overflow: visible; background: white !important; }
+  svg { width: 100% !important; height: auto !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>&#127970; LeagueApps Org Chart</h1>
+    <div class="meta">Last synced from Notion &bull; March 25, 2026</div>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" onclick="window.print()">&#128438; Print / Save PDF</button>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="search-wrap">
+    <span class="search-icon">&#128269;</span>
+    <input type="text" id="search" placeholder="Search by name, title, or dept..." oninput="handleSearch(this.value)">
+  </div>
+  <button class="ctrl-btn" onclick="expandAll()">&#8862; Expand All</button>
+  <button class="ctrl-btn" onclick="collapseAll()">&#8863; Collapse All</button>
+  <button class="ctrl-btn" onclick="resetView()">&#8635; Reset View</button>
+  <button class="ctrl-btn" onclick="clearSearch()">&#10005; Clear Search</button>
+  <div class="emp-count" id="emp-count">104 employees</div>
+</div>
+
+<div class="legend-bar" id="legend-bar">
+  <span class="legend-label">Dept:</span>
+</div>
+
+<div id="chart">
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="doZoom(1.3)" title="Zoom in">+</button>
+    <button class="zoom-btn" onclick="doZoom(0.75)" title="Zoom out">&minus;</button>
+    <button class="zoom-btn" onclick="resetView()" title="Fit to view" style="font-size:13px">&#8635;</button>
+  </div>
+  <div class="note-banner">&#128161; Click any node to expand/collapse &bull; Drag to pan &bull; Scroll to zoom</div>
+</div>
+<div id="tooltip"></div>
+
+<script>
+// =============================================================
+// DATA — auto-generated from Notion Employee Directory
+// Updated: March 25, 2026
+// =============================================================
+const EMPLOYEES = [
+  {
+    "id": "3321c2190dd44eb8a7d460cb809544dd",
+    "name": "Alex Arena",
+    "title": "Marketing Manager",
+    "dept": "Marketing",
+    "mgr": "272f9a8a951b8018a89ef8b19e10b579",
+    "email": "aarena@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "c9014f01be724a7897821cf1a4043ffb",
+    "name": "Allison Wityk",
+    "title": "Customer Success Manager",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "awityk@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "dbd3a04eda134fa88a080a9b004a4570",
+    "name": "Anne Parnell",
+    "title": "Senior Director of Product Design",
+    "dept": "Product",
+    "mgr": "f8f78b027a614dd9a44d63f0ef7adfc8",
+    "email": "aparnell@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "4140f40c79c64d2b9098bf1aeea3bf81",
+    "name": "Anthony Martin",
+    "title": "Junior Account Executive",
+    "dept": "Sales",
+    "mgr": "660e3d03b55342838f7c21928c18b8a9",
+    "email": "amartin@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "c8ff7004d37e4455952af1b7d4592842",
+    "name": "Ben Hwang",
+    "title": "AI Automation Engineer",
+    "dept": "Growth",
+    "mgr": "0bb2ea739da3442290d0c933fb3b88d7",
+    "email": "bhwang@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "8e8a2c909b504debbe4fef1ed73004cf",
+    "name": "Bob Daly",
+    "title": "Staff Platform Engineer",
+    "dept": "Engineering",
+    "mgr": "ff20448170f34eac8b7a618261ab3f23",
+    "email": "bob@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "f1ae17f7c9ee4e958c59b51041071890",
+    "name": "Brian Litvack",
+    "title": "CEO",
+    "dept": "Management",
+    "mgr": null,
+    "email": "brian@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "0563b4604fa745ec917bee4f079d3973",
+    "name": "Brian Veitch",
+    "title": "QA Engineer",
+    "dept": "Engineering",
+    "mgr": "18bfa8b35c5f4dc4ad87ced6161aa810",
+    "email": "bveitch@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "5eb3361258fe41d49543dff6ce4e1792",
+    "name": "Brittni Dunn",
+    "title": "Product Manager, Registration",
+    "dept": "Product",
+    "mgr": "f8f78b027a614dd9a44d63f0ef7adfc8",
+    "email": "brittni@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "272f9a8a951b80869e26f9feda80d288",
+    "name": "Chris Garvey",
+    "title": "IT Manager",
+    "dept": "Engineering",
+    "mgr": "ff20448170f34eac8b7a618261ab3f23",
+    "email": "cgarvey@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "2fa8dc3535bb4fd384a17aab59cc7ced",
+    "name": "Chris Iocca",
+    "title": "Sr. Manager, Sales Development",
+    "dept": "Sales",
+    "mgr": "660e3d03b55342838f7c21928c18b8a9",
+    "email": "ciocca@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "1d5f9a8a951b80d38ccbe36c12464bbb",
+    "name": "Chris Marzo",
+    "title": "Senior Customer Success Manager",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "cmarzo@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b80ed8f7addd318d69c16",
+    "name": "Christian Goncalves",
+    "title": "Sr Mobile SDET",
+    "dept": "Engineering",
+    "mgr": "4e9c4c9a0a154855bc4482196bbe05a7",
+    "email": "cgoncalves@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "2a8f9a8a951b803880eff0381d0fa437",
+    "name": "Clark Macon",
+    "title": "Business Development Representative",
+    "dept": "Sales",
+    "mgr": "2fa8dc3535bb4fd384a17aab59cc7ced",
+    "email": "cmacon@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "e5b464bc2c1a405686b5d3de89ec7a77",
+    "name": "Colin Reilly",
+    "title": "Customer Success Manager",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "creilly@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "e37fb78bb72948c0bff967a56d99ba11",
+    "name": "Craig McGinn",
+    "title": "Senior Director, Strategic Partner Growth",
+    "dept": "Customer Success",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "cmcginn@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "e0d6e2a0abc447a0b95126c4418fdc32",
+    "name": "Dan Martinez",
+    "title": "Account Manager",
+    "dept": "Customer Success",
+    "mgr": "e37fb78bb72948c0bff967a56d99ba11",
+    "email": "dmartinez@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "2f0f9a8a951b805d8e45ecc3bfd37524",
+    "name": "Daniel Eskenazi",
+    "title": "VP, Engineering",
+    "dept": "Engineering",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "deskenazi@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "325f9a8a951b805bb9eedd64311f944b",
+    "name": "David Alston",
+    "title": "Enterprise Account Executive",
+    "dept": "Sales",
+    "mgr": "660e3d03b55342838f7c21928c18b8a9",
+    "email": "dalston@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "c358887a3bb44aa9a92d75da042986b4",
+    "name": "David Cameron",
+    "title": "Staff Front-End Engineer",
+    "dept": "Engineering",
+    "mgr": "18bfa8b35c5f4dc4ad87ced6161aa810",
+    "email": "dcameron@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "29b263fa96044d52948048917207d20a",
+    "name": "Derek Showler",
+    "title": "Senior SDET",
+    "dept": "Engineering",
+    "mgr": "145f9a8a951b80fcad09f66c445ecc37",
+    "email": "dshowler@leagueapps.com",
+    "location": "VA"
+  },
+  {
+    "id": "c99943eea0a44dfe86f4401713a7f120",
+    "name": "Devon Downs",
+    "title": "Senior Software Engineer",
+    "dept": "Engineering",
+    "mgr": "249af93a0f5f43ada2a35e1d3456dffd",
+    "email": "ddowns@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "13a8c44093c3405abad48e3c3e3bb808",
+    "name": "Dylan Tropp",
+    "title": "Mid-Market Account Executive",
+    "dept": "Sales",
+    "mgr": "660e3d03b55342838f7c21928c18b8a9",
+    "email": "dtropp@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b800aad5ac7d0054e86d5",
+    "name": "Eduardo Pelissari",
+    "title": "Senior Front End Engineer",
+    "dept": "Engineering",
+    "mgr": "145f9a8a951b80fcad09f66c445ecc37",
+    "email": "epelissari@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "253aae21c73149068222a841e5fdb7ac",
+    "name": "Edvan Soares",
+    "title": "Senior Backend Engineer",
+    "dept": "Engineering",
+    "mgr": "4e9c4c9a0a154855bc4482196bbe05a7",
+    "email": "",
+    "location": ""
+  },
+  {
+    "id": "5b0776c14b1f495f83b5c969543bf42b",
+    "name": "Ellie Anagnostopoulos",
+    "title": "Senior Engineer",
+    "dept": "Engineering",
+    "mgr": "249af93a0f5f43ada2a35e1d3456dffd",
+    "email": "eroussopoulos@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "d57773dfae24443f98205b265ead35ca",
+    "name": "Emily Blackwell",
+    "title": "Lead Product Designer",
+    "dept": "Product",
+    "mgr": "dbd3a04eda134fa88a080a9b004a4570",
+    "email": "eblackwell@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "9248c417cca547029e02e673ac1c3732",
+    "name": "Ethan Davidson",
+    "title": "Staff Platform Engineer",
+    "dept": "Engineering",
+    "mgr": "ff20448170f34eac8b7a618261ab3f23",
+    "email": "edavidson@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "471343b01f814743b52522bf38f48cc8",
+    "name": "Evan Manns",
+    "title": "Software Engineer",
+    "dept": "Engineering",
+    "mgr": "18bfa8b35c5f4dc4ad87ced6161aa810",
+    "email": "emanns@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "e2374c09f0914dc58bb8551589178794",
+    "name": "Faith Raster",
+    "title": "Senior Customer Support Specialist",
+    "dept": "Customer Success",
+    "mgr": "923a59aa16fe42aaaeefa177b148d3b0",
+    "email": "fraster@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "272f9a8a951b8065bad3f0946853ada4",
+    "name": "Gabe Diegel",
+    "title": "Staff Engineer",
+    "dept": "Engineering",
+    "mgr": "249af93a0f5f43ada2a35e1d3456dffd",
+    "email": "gdiegel@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "0b958fa7ee504c6f820a127ad4a6ddab",
+    "name": "Gautam Chowdhry",
+    "title": "Sr. Product Management Director",
+    "dept": "Product",
+    "mgr": "f8f78b027a614dd9a44d63f0ef7adfc8",
+    "email": "gautam@leagueapps.com",
+    "location": "VA"
+  },
+  {
+    "id": "3a24dcc30bd743068771abb687d5633e",
+    "name": "Grant Sirlin",
+    "title": "Senior Business Development Manager",
+    "dept": "Growth",
+    "mgr": "0bb2ea739da3442290d0c933fb3b88d7",
+    "email": "gsirlin@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b80c8bc4ec5d64d9fe040",
+    "name": "Guiv Hakimi",
+    "title": "Product Manager",
+    "dept": "Product",
+    "mgr": "f8f78b027a614dd9a44d63f0ef7adfc8",
+    "email": "ghakimi@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "0840cc13706d4a219361a79b2acd8a94",
+    "name": "Harry Ganz",
+    "title": "Senior Software Engineer",
+    "dept": "Engineering",
+    "mgr": "4e9c4c9a0a154855bc4482196bbe05a7",
+    "email": "hganz@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b80429ab7e5b96c38f989",
+    "name": "Helinton Steffens",
+    "title": "Senior Back End Engineer",
+    "dept": "Engineering",
+    "mgr": "4e9c4c9a0a154855bc4482196bbe05a7",
+    "email": "hsteffens@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "6d3e3d8dade04787bb07ef3a1c1f094c",
+    "name": "Henrique Percu",
+    "title": "Senior Software Engineer",
+    "dept": "Engineering",
+    "mgr": "18bfa8b35c5f4dc4ad87ced6161aa810",
+    "email": "hpercu@leagueapps.com",
+    "location": ""
+  },
+  {
+    "id": "2a8f9a8a951b80a99ac7f33eec6ae359",
+    "name": "Henry Kuenstler",
+    "title": "Business Development Representatives",
+    "dept": "Sales",
+    "mgr": "2fa8dc3535bb4fd384a17aab59cc7ced",
+    "email": "hkuenstler@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "6ae0ba07961f4c04a8491aa3beae9e4e",
+    "name": "Iris Gomez",
+    "title": "Senior Associate, Design Shop",
+    "dept": "Customer Success",
+    "mgr": "272f9a8a951b80349c76eed56af4838f",
+    "email": "igomez@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "dcde3dfcbb0c4399a8af740d20b823af",
+    "name": "Jamie Hancock",
+    "title": "Culture & Engagement Director",
+    "dept": "People Team",
+    "mgr": "9fa5b1d026cb4c998a9db6fbe7b784d1",
+    "email": "jhancock@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "f8f78b027a614dd9a44d63f0ef7adfc8",
+    "name": "Javie Rios",
+    "title": "Head of Product",
+    "dept": "Product",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "javie@leagueapps.com",
+    "location": "VA"
+  },
+  {
+    "id": "272f9a8a951b80f08579ed3454cc3630",
+    "name": "Jeff Clark",
+    "title": "Director of Product, Mobile & Consumer",
+    "dept": "Product",
+    "mgr": "f8f78b027a614dd9a44d63f0ef7adfc8",
+    "email": "jclark@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b8018a89ef8b19e10b579",
+    "name": "Jennifer Cooper",
+    "title": "Director of Demand Gen and Field Marketing",
+    "dept": "Marketing",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "jennifercooper@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "8ac16bf7b9cc4c39b1d2dda9edc41625",
+    "name": "Jeremy Goldberg",
+    "title": "President",
+    "dept": "Management",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "jeremy@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "02c73b4579394736ad9159def493c7ad",
+    "name": "Joe Gangone",
+    "title": "Executive & Revenue Advisor",
+    "dept": "Sales",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "gangoneconsult@aol.com",
+    "location": "New York"
+  },
+  {
+    "id": "22588c19052b4dbeb7c8040d987bd9c3",
+    "name": "Joey Mangili",
+    "title": "Senior Customer Onboarding Specialist",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "jmangili@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "e969e9319d0d46b9b312a300ee47359c",
+    "name": "John Rinehart",
+    "title": "Senior Customer Onboarding Specialist",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "jrinehart@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "30df9a8a951b80e094f3dfe163f588ac",
+    "name": "Jon Park",
+    "title": "Content Marketing Manager",
+    "dept": "Marketing",
+    "mgr": "c8e4febc5b47405195394f94b50ee4ad",
+    "email": "jpark@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b80b19076d1a6594e9de6",
+    "name": "Jorge Corea",
+    "title": "Senior Frontend Engineer",
+    "dept": "Engineering",
+    "mgr": "249af93a0f5f43ada2a35e1d3456dffd",
+    "email": "jcorrea@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "91a52131d1fa428098c1c844c8d96bcf",
+    "name": "Josephine Cunanan",
+    "title": "Senior Customer Success Manager",
+    "dept": "Customer Success",
+    "mgr": "9e0be5b8fbc4435c96a499785706c07c",
+    "email": "jcunanan@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "1c6517232dba48bc8a565aceec9f92bf",
+    "name": "Kara Lawson",
+    "title": "Product Marketing Director",
+    "dept": "Marketing",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "klawson@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "9e0be5b8fbc4435c96a499785706c07c",
+    "name": "Katie Ringel",
+    "title": "Director, BD Account Management & Operations",
+    "dept": "Customer Success",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "kringel@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "c800a26f82024f218a22a24d54b0a434",
+    "name": "Kelsey Grambeau",
+    "title": "Enterprise Account Executive",
+    "dept": "Sales",
+    "mgr": "660e3d03b55342838f7c21928c18b8a9",
+    "email": "kgrambeau@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b8069ac3cd734171646b8",
+    "name": "Kevin Callari",
+    "title": "Business Development Representative",
+    "dept": "Sales",
+    "mgr": "2fa8dc3535bb4fd384a17aab59cc7ced",
+    "email": "kcallari@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "a751c3d1e49241fe9282bbef9abc3971",
+    "name": "Kevin Gotelli",
+    "title": "Enterprise Account Executive",
+    "dept": "Sales",
+    "mgr": "660e3d03b55342838f7c21928c18b8a9",
+    "email": "kgotelli@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "30cf9a8a951b8051820de05ddd612afa",
+    "name": "Kevin Hutchinson",
+    "title": "Customer Support Specialist",
+    "dept": "Customer Success",
+    "mgr": "923a59aa16fe42aaaeefa177b148d3b0",
+    "email": "khutchinson@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "203f9a8a951b800b8620c83aa72d0529",
+    "name": "Kevin Pereira",
+    "title": "Customer Success Manager",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "kpereira@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "4e9c4c9a0a154855bc4482196bbe05a7",
+    "name": "Kris McEwan",
+    "title": "Engineering Manager",
+    "dept": "Engineering",
+    "mgr": "2f0f9a8a951b805d8e45ecc3bfd37524",
+    "email": "",
+    "location": ""
+  },
+  {
+    "id": "9fa5b1d026cb4c998a9db6fbe7b784d1",
+    "name": "Leigh Hartman",
+    "title": "VP, People",
+    "dept": "Management",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "lhartman@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "9a2e045f34fc408f805f1513fb07cdf4",
+    "name": "Liam Clarke",
+    "title": "Senior Business Development Representative",
+    "dept": "Sales",
+    "mgr": "2fa8dc3535bb4fd384a17aab59cc7ced",
+    "email": "lfilipowski@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "0bb2ea739da3442290d0c933fb3b88d7",
+    "name": "Linda Wang",
+    "title": "VP of Growth & COS",
+    "dept": "Management",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "lwang@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b8082bc0bd44e5127b0f1",
+    "name": "Louis Pacheco",
+    "title": "Web Designer",
+    "dept": "Customer Success",
+    "mgr": "272f9a8a951b80349c76eed56af4838f",
+    "email": "lpacheco@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "28c120cde7624bef82ba04a23171d838",
+    "name": "Mack Joss",
+    "title": "Marketing Designer",
+    "dept": "Marketing",
+    "mgr": "c8e4febc5b47405195394f94b50ee4ad",
+    "email": "mjoss@leagueapps.com",
+    "location": ""
+  },
+  {
+    "id": "d9d5a1935564402eb7a1c3279b91653c",
+    "name": "Madeline Bowden",
+    "title": "Product Designer",
+    "dept": "Product",
+    "mgr": "dbd3a04eda134fa88a080a9b004a4570",
+    "email": "mbowden@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "4959bcf35e8f4d279b55c8f85a2c5f2c",
+    "name": "Maggie Jent",
+    "title": "Senior Business Development Rep",
+    "dept": "Sales",
+    "mgr": "2fa8dc3535bb4fd384a17aab59cc7ced",
+    "email": "mjent@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "9f858160059f48f5a0c21f218888a94c",
+    "name": "Mark Torres",
+    "title": "Customer Support Manager",
+    "dept": "Customer Success",
+    "mgr": "923a59aa16fe42aaaeefa177b148d3b0",
+    "email": "mtorres@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "ba08157e59ab4202bed2b7aa5217b731",
+    "name": "Mark Yosowitz",
+    "title": "General Counsel & Head of Global Legal Affairs",
+    "dept": "Legal Affairs",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "myosowitz@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b802fab94ca8ccd51b13c",
+    "name": "Mat Mendes",
+    "title": "Senior Software Engineer",
+    "dept": "Engineering",
+    "mgr": "249af93a0f5f43ada2a35e1d3456dffd",
+    "email": "mmendes@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "6d241df557c44affac4a333031c2643c",
+    "name": "Melissa Macaluso",
+    "title": "Senior Manager, Customer Success",
+    "dept": "Customer Success",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "melissa@leagueapps.com",
+    "location": "VA"
+  },
+  {
+    "id": "272f9a8a951b8011aa2ddff613360656",
+    "name": "Melissa Mercado",
+    "title": "Web Designer",
+    "dept": "Customer Success",
+    "mgr": "272f9a8a951b80349c76eed56af4838f",
+    "email": "melissa@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "d24a5d00b9324e0c84160db6703b269e",
+    "name": "Melissa Preiner",
+    "title": "Senior Customer Success Manager, Strategic Accounts",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "mkucharski@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "6adf2f034d4e4e0bbfbf4a15ffed487b",
+    "name": "Mike Belloli",
+    "title": "Sr. Sales Operations Manager",
+    "dept": "Revenue Operations",
+    "mgr": "30af9a8a951b803e8cb7cd65240c9952",
+    "email": "mbelloli@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "c8e4febc5b47405195394f94b50ee4ad",
+    "name": "Mike Belt",
+    "title": "Creative Director",
+    "dept": "Marketing",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "mbelt@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "b30c07b436f84ea3b1dbe5ba6c7f716a",
+    "name": "Mike Kantzer",
+    "title": "Senior Platform Engineer",
+    "dept": "Engineering",
+    "mgr": "ff20448170f34eac8b7a618261ab3f23",
+    "email": "mkantzer@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "ff20448170f34eac8b7a618261ab3f23",
+    "name": "Mitch Eatough",
+    "title": "Engineering Manager",
+    "dept": "Engineering",
+    "mgr": "2f0f9a8a951b805d8e45ecc3bfd37524",
+    "email": "meatough@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "6868a2d57d484294882bec768f88cc38",
+    "name": "Nadya Pak",
+    "title": "Senior QA Engineer",
+    "dept": "Engineering",
+    "mgr": "249af93a0f5f43ada2a35e1d3456dffd",
+    "email": "npak@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "2070f0c938b44d168b9a463ca3250940",
+    "name": "Nathan Broyles",
+    "title": "Staff Engineer, IOS",
+    "dept": "Engineering",
+    "mgr": "4e9c4c9a0a154855bc4482196bbe05a7",
+    "email": "nbroyles@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "203f9a8a951b80e78657e5455d68fcbb",
+    "name": "Netti Dayhuff",
+    "title": "Senior Customer Success Manager",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "adayhuff@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "a7df7a96ad414880b0f484b3aea58a6d",
+    "name": "Nichelle Simon",
+    "title": "Senior Specialist, Customer Success Ops",
+    "dept": "Customer Success",
+    "mgr": "30af9a8a951b803e8cb7cd65240c9952",
+    "email": "nsimon@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "30593e017dfe4df2a694ddd87886274f",
+    "name": "Nicholas Siphengphone",
+    "title": "Senior Software Engineer",
+    "dept": "Engineering",
+    "mgr": "145f9a8a951b80fcad09f66c445ecc37",
+    "email": "nsiphengphone@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "name": "Nick Naso",
+    "title": "Chief Revenue Officer",
+    "dept": "Management",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "",
+    "location": "New York"
+  },
+  {
+    "id": "34f98398fbe0486eb578e0a86fdf7570",
+    "name": "Onki Yeung",
+    "title": "Senior Customer Onboarding Specialist",
+    "dept": "Customer Success",
+    "mgr": "6d241df557c44affac4a333031c2643c",
+    "email": "oyeung@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "660e3d03b55342838f7c21928c18b8a9",
+    "name": "Paul Cusick",
+    "title": "VP, Sales",
+    "dept": "Sales",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "pcusick@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "d892edcb1dac4deab0e6fada9b52836a",
+    "name": "Paul Decoursey",
+    "title": "Staff Software Engineer",
+    "dept": "Engineering",
+    "mgr": "145f9a8a951b80fcad09f66c445ecc37",
+    "email": "pdecoursey@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "07e2766316e446f58b29971a7ee4fe09",
+    "name": "Paul Hanounik",
+    "title": "VP of Finance",
+    "dept": "Finance",
+    "mgr": "f1ae17f7c9ee4e958c59b51041071890",
+    "email": "phanounik@leagueapps.com",
+    "location": ""
+  },
+  {
+    "id": "318f9a8a951b808ba207d96e13a9ff79",
+    "name": "Reese Radanovich",
+    "title": "Customer Support Specialist",
+    "dept": "Customer Success",
+    "mgr": "923a59aa16fe42aaaeefa177b148d3b0",
+    "email": "rradanovich@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "249af93a0f5f43ada2a35e1d3456dffd",
+    "name": "Richard Hopton",
+    "title": "Engineering Manager",
+    "dept": "Engineering",
+    "mgr": "2f0f9a8a951b805d8e45ecc3bfd37524",
+    "email": "",
+    "location": ""
+  },
+  {
+    "id": "604c55b5ac4a48468a1cdb75325fe0ac",
+    "name": "Rohit Kohli",
+    "title": "Executive Director",
+    "dept": "Sales",
+    "mgr": "660e3d03b55342838f7c21928c18b8a9",
+    "email": "rohit@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "18bfa8b35c5f4dc4ad87ced6161aa810",
+    "name": "Ryan Bulaclac",
+    "title": "Engineering Manager",
+    "dept": "Engineering",
+    "mgr": "2f0f9a8a951b805d8e45ecc3bfd37524",
+    "email": "ryanbulaclac@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "c98ce4a051c54dd5a50bc42f8e0a5b09",
+    "name": "Ryan Miller",
+    "title": "Soccer Analyst, Product",
+    "dept": "Product",
+    "mgr": "f8f78b027a614dd9a44d63f0ef7adfc8",
+    "email": "",
+    "location": ""
+  },
+  {
+    "id": "109c80ff101c47edb6ae985d50d2cb38",
+    "name": "Sam Failing",
+    "title": "Engineer",
+    "dept": "Engineering",
+    "mgr": "18bfa8b35c5f4dc4ad87ced6161aa810",
+    "email": "sfailing@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "174f9a8a951b800abf2cc0dc539bc4fc",
+    "name": "Sandler Douglas",
+    "title": "Business Development Representative",
+    "dept": "Sales",
+    "mgr": "2fa8dc3535bb4fd384a17aab59cc7ced",
+    "email": "sdouglas@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "30af9a8a951b803e8cb7cd65240c9952",
+    "name": "Sarah Green",
+    "title": "Head of Revenue Operations",
+    "dept": "Revenue Operations",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "sgreen@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "e73787729e7c4e63a095323485035945",
+    "name": "Sarah Hibner",
+    "title": "Senior Product Designer",
+    "dept": "Product",
+    "mgr": "dbd3a04eda134fa88a080a9b004a4570",
+    "email": "shibner@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "28b6127676fd4e5b8022ce4c79b22f64",
+    "name": "Sat Daya Khalsa",
+    "title": "Staff Data Engineer",
+    "dept": "Engineering",
+    "mgr": "249af93a0f5f43ada2a35e1d3456dffd",
+    "email": "",
+    "location": ""
+  },
+  {
+    "id": "086e44d7692544338a7a7e418270aac6",
+    "name": "Simran Malhotra",
+    "title": "FP&A Analyst",
+    "dept": "Finance",
+    "mgr": "07e2766316e446f58b29971a7ee4fe09",
+    "email": "smalhotra@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "272f9a8a951b80958425e7f2bbef9b6a",
+    "name": "Stephanie Twentyman",
+    "title": "Senior Business Development Representative",
+    "dept": "Customer Success",
+    "mgr": "923a59aa16fe42aaaeefa177b148d3b0",
+    "email": "stwentyman@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "13d7ad71c11844998c5345aa23690f55",
+    "name": "Stephen Boyd",
+    "title": "Sr. Customer Success Manager, Expansion",
+    "dept": "Customer Success",
+    "mgr": "e37fb78bb72948c0bff967a56d99ba11",
+    "email": "sboyd@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "145f9a8a951b80fcad09f66c445ecc37",
+    "name": "Summer Romack",
+    "title": "Engineering Manager",
+    "dept": "Engineering",
+    "mgr": "2f0f9a8a951b805d8e45ecc3bfd37524",
+    "email": "sromack@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "923a59aa16fe42aaaeefa177b148d3b0",
+    "name": "Taylor Collins",
+    "title": "Director, Customer Support",
+    "dept": "Customer Success",
+    "mgr": "2a2f9a8a951b80df8617e2bf1ce7cba2",
+    "email": "taylor@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "b36f18d7580e40ea953c0cf421725efa",
+    "name": "Tyler Storch",
+    "title": "Payments Operations Manager",
+    "dept": "Customer Success",
+    "mgr": "923a59aa16fe42aaaeefa177b148d3b0",
+    "email": "tstorch@leagueapps.com",
+    "location": "New York"
+  },
+  {
+    "id": "9b63668dac6a4a48b631ad6cc800f677",
+    "name": "Victoria Phillips",
+    "title": "Senior Engineer",
+    "dept": "Engineering",
+    "mgr": "145f9a8a951b80fcad09f66c445ecc37",
+    "email": "vta@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "96d87e20a7124f1696e6290bf090ebf1",
+    "name": "Zach Joyner",
+    "title": "Senior Platform Engineer",
+    "dept": "Engineering",
+    "mgr": "ff20448170f34eac8b7a618261ab3f23",
+    "email": "zjoyner@leagueapps.com",
+    "location": "Remote"
+  },
+  {
+    "id": "272f9a8a951b80349c76eed56af4838f",
+    "name": "Zay Clarke",
+    "title": "Manager, Design Shop",
+    "dept": "Customer Success",
+    "mgr": "e37fb78bb72948c0bff967a56d99ba11",
+    "email": "iclarke@leagueapps.com",
+    "location": "New York"
+  }
+];
+
+const DEPT_COLORS = {
+  'Leadership': '#1e3a5f',
+  'Management': '#312e81',
+  'Engineering': '#0369a1',
+  'Product': '#7c3aed',
+  'Marketing': '#be185d',
+  'Sales': '#dc2626',
+  'Customer Success': '#047857',
+  'Business Development': '#b45309',
+  'People': '#0891b2',
+  'People Team': '#0891b2',
+  'Growth': '#65a30d',
+  'Finance': '#475569',
+  'Rev Ops': '#9333ea',
+  'Revenue Operations': '#9333ea',
+  'Enterprise': '#92400e',
+  'Operations': '#6d28d9',
+  'Special Projects': '#6b7280',
+  'Community': '#0f766e',
+};
+
+function deptColor(dept) {
+  return DEPT_COLORS[dept] || '#6b7280';
+}
+
+// =============================================================
+// BUILD HIERARCHY
+// =============================================================
+function buildTree(employees) {
+  const byId = {};
+  employees.forEach(e => {
+    byId[e.id] = { ...e, children: [] };
+  });
+
+  const roots = [];
+  employees.forEach(e => {
+    const node = byId[e.id];
+    if (e.mgr && byId[e.mgr]) {
+      byId[e.mgr].children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  function sortNode(n) {
+    n.children.sort((a, b) => {
+      // Sort managers with direct reports first, then alphabetically
+      const aHas = a.children.length > 0 ? 0 : 1;
+      const bHas = b.children.length > 0 ? 0 : 1;
+      if (aHas !== bHas) return aHas - bHas;
+      return a.name.localeCompare(b.name);
+    });
+    n.children.forEach(sortNode);
+  }
+
+  // Sort roots: known leadership first
+  const leaderOrder = ['Brian Litvack', 'Jeremy Goldberg', 'Nick Naso', 'Daniel Eskenazi', 'Javie Rios'];
+  roots.sort((a, b) => {
+    const ai = leaderOrder.indexOf(a.name);
+    const bi = leaderOrder.indexOf(b.name);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    const aHas = a.children.length > 0 ? 0 : 1;
+    const bHas = b.children.length > 0 ? 0 : 1;
+    if (aHas !== bHas) return aHas - bHas;
+    return a.name.localeCompare(b.name);
+  });
+
+  roots.forEach(sortNode);
+
+  return {
+    id: '__root__',
+    name: 'LeagueApps',
+    title: '',
+    dept: '',
+    mgr: null,
+    children: roots
+  };
+}
+
+// =============================================================
+// CHART INIT
+// =============================================================
+const NW = 192, NH = 66, PX = 28, PY = 14;
+let svg, gMain, zoomBehavior, rootNode;
+
+function initChart() {
+  const container = document.getElementById('chart');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  svg = d3.select('#chart').append('svg')
+    .attr('width', W).attr('height', H);
+
+  zoomBehavior = d3.zoom()
+    .scaleExtent([0.08, 2.5])
+    .on('zoom', e => gMain.attr('transform', e.transform));
+
+  svg.call(zoomBehavior);
+  gMain = svg.append('g');
+
+  const treeData = buildTree(EMPLOYEES);
+  rootNode = d3.hierarchy(treeData);
+
+  // Collapse all except top-level by default
+  rootNode.descendants().forEach(d => {
+    if (d.depth >= 2 && d.children) {
+      d._children = d.children;
+      d.children = null;
+    }
+  });
+
+  update(rootNode);
+
+  // Initial view: center on visible chart
+  setTimeout(() => fitView(), 200);
+}
+
+function treeLayout(root) {
+  d3.tree()
+    .nodeSize([NW + PX, NH + PY])
+    .separation((a, b) => a.parent === b.parent ? 1 : 1.1)
+    (root);
+}
+
+function update(source) {
+  treeLayout(rootNode);
+
+  const nodes = rootNode.descendants().filter(d => d.data.id !== '__root__');
+  const links = rootNode.links().filter(d => d.source.data.id !== '__root__');
+
+  document.getElementById('emp-count').textContent = nodes.length + ' employees';
+
+  // --- LINKS ---
+  const link = gMain.selectAll('.link')
+    .data(links, d => d.target.data.id);
+
+  const linkEnter = link.enter().append('path').attr('class', 'link')
+    .attr('d', () => {
+      const s = source.y0 !== undefined ? source : source.parent || source;
+      const ox = s.x0 || s.x || 0, oy = (s.y0 || s.y || 0) + NH/2;
+      return `M${ox},${oy} C${ox},${oy} ${ox},${oy} ${ox},${oy}`;
+    });
+
+  linkEnter.merge(link).transition().duration(300)
+    .attr('d', d => {
+      const sx = d.source.x, sy = d.source.y + NH/2;
+      const tx = d.target.x, ty = d.target.y - NH/2;
+      const my = (sy + ty) / 2;
+      return `M${sx},${sy} C${sx},${my} ${tx},${my} ${tx},${ty}`;
+    });
+
+  link.exit().transition().duration(300)
+    .attr('d', () => {
+      const ox = source.x, oy = source.y + NH/2;
+      return `M${ox},${oy} C${ox},${oy} ${ox},${oy} ${ox},${oy}`;
+    })
+    .remove();
+
+  // --- NODES ---
+  const node = gMain.selectAll('.node')
+    .data(nodes, d => d.data.id);
+
+  const nodeEnter = node.enter().append('g').attr('class', 'node')
+    .attr('transform', () => {
+      const p = source.y0 !== undefined ? source : (source.parent || source);
+      return `translate(${(p.x0 || p.x || 0) - NW/2},${p.y0 || p.y || 0})`;
+    })
+    .on('click', (e, d) => {
+      if (d.children) { d._children = d.children; d.children = null; }
+      else { d.children = d._children; d._children = null; }
+      update(d);
+    })
+    .on('mouseover', showTip)
+    .on('mousemove', moveTip)
+    .on('mouseout', hideTip);
+
+  // Shadow / background
+  nodeEnter.append('rect')
+    .attr('width', NW).attr('height', NH).attr('y', -NH/2)
+    .attr('rx', 8).attr('ry', 8)
+    .attr('fill', 'white')
+    .attr('stroke', d => deptColor(d.data.dept))
+    .attr('stroke-width', 1.5)
+    .style('filter', 'drop-shadow(0 2px 6px rgba(0,0,0,0.09))');
+
+  // Left color bar
+  nodeEnter.append('rect')
+    .attr('width', 5).attr('height', NH).attr('y', -NH/2)
+    .attr('rx', 8).attr('ry', 8)
+    .attr('fill', d => deptColor(d.data.dept));
+
+  // Initials circle
+  nodeEnter.append('circle')
+    .attr('cx', 22).attr('cy', 0)
+    .attr('r', 14)
+    .attr('fill', d => deptColor(d.data.dept))
+    .attr('opacity', 0.15);
+
+  nodeEnter.append('text')
+    .attr('class', 'initials')
+    .attr('x', 22).attr('y', 4)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '10px')
+    .attr('font-weight', '700')
+    .attr('fill', d => deptColor(d.data.dept))
+    .text(d => d.data.name.split(' ').map(p => p[0]).join('').substring(0, 2));
+
+  // Name
+  nodeEnter.append('text')
+    .attr('class', 'emp-name')
+    .attr('x', 42).attr('y', -6)
+    .attr('font-size', '12px').attr('font-weight', '700').attr('fill', '#1e293b')
+    .text(d => truncate(d.data.name, 18));
+
+  // Title
+  nodeEnter.append('text')
+    .attr('class', 'emp-title')
+    .attr('x', 42).attr('y', 9)
+    .attr('font-size', '10px').attr('fill', '#64748b')
+    .text(d => truncate(d.data.title || '', 24));
+
+  // Dept
+  nodeEnter.append('text')
+    .attr('class', 'emp-dept')
+    .attr('x', 42).attr('y', 23)
+    .attr('font-size', '9px').attr('font-weight', '600')
+    .attr('fill', d => deptColor(d.data.dept))
+    .text(d => (d.data.dept || '').toUpperCase().substring(0, 22));
+
+  // Expand/collapse badge
+  nodeEnter.append('g').attr('class', 'badge')
+    .attr('transform', `translate(${NW/2}, ${NH/2})`);
+
+  // Merge + animate
+  const nodeUpdate = nodeEnter.merge(node);
+  nodeUpdate.transition().duration(300)
+    .attr('transform', d => `translate(${d.x - NW/2},${d.y})`);
+
+  // Update badge (child count indicator)
+  nodeUpdate.select('.badge').selectAll('*').remove();
+  nodeUpdate.each(function(d) {
+    const cnt = (d.children || d._children || []).length;
+    if (cnt === 0) return;
+    const badge = d3.select(this).select('.badge');
+    badge.append('circle')
+      .attr('r', 9).attr('cy', 0)
+      .attr('fill', d._children ? '#1d4ed8' : deptColor(d.data.dept))
+      .attr('opacity', 0.9);
+    badge.append('text')
+      .attr('text-anchor', 'middle').attr('y', 4)
+      .attr('font-size', '9px').attr('font-weight', '800')
+      .attr('fill', 'white')
+      .text(d._children ? `+${cnt}` : cnt);
+  });
+
+  node.exit().transition().duration(300)
+    .attr('transform', `translate(${source.x - NW/2},${source.y})`)
+    .remove();
+
+  nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+}
+
+function truncate(s, max) {
+  return s.length > max ? s.substring(0, max - 1) + '…' : s;
+}
+
+// =============================================================
+// CONTROLS
+// =============================================================
+function expandAll() {
+  rootNode.descendants().forEach(d => {
+    if (d._children) { d.children = d._children; d._children = null; }
+  });
+  update(rootNode);
+  setTimeout(fitView, 350);
+}
+
+function collapseAll() {
+  rootNode.descendants().forEach(d => {
+    if (d.children && d.data.id !== '__root__') {
+      d._children = d.children; d.children = null;
+    }
+  });
+  update(rootNode);
+  setTimeout(fitView, 350);
+}
+
+function fitView() {
+  const container = document.getElementById('chart');
+  const W = container.clientWidth, H = container.clientHeight;
+  const bounds = gMain.node().getBBox();
+  if (!bounds.width || !bounds.height) return;
+  const scale = Math.min(0.9, Math.min(W / (bounds.width + 60), H / (bounds.height + 60)));
+  const tx = (W - bounds.width * scale) / 2 - bounds.x * scale;
+  const ty = (H - bounds.height * scale) / 2 - bounds.y * scale;
+  svg.transition().duration(500)
+    .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+function resetView() {
+  clearSearch();
+  fitView();
+}
+
+function doZoom(factor) {
+  svg.transition().call(zoomBehavior.scaleBy, factor);
+}
+
+// =============================================================
+// SEARCH
+// =============================================================
+let searchTimer;
+function handleSearch(q) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => applySearch(q.trim().toLowerCase()), 180);
+}
+
+function applySearch(q) {
+  if (!q) {
+    gMain.selectAll('.node').classed('dimmed', false).classed('search-match', false);
+    gMain.selectAll('.link').classed('dimmed', false);
+    return;
+  }
+  const matchIds = new Set();
+  rootNode.descendants().forEach(d => {
+    if (d.data.id === '__root__') return;
+    const hit = d.data.name.toLowerCase().includes(q)
+      || (d.data.title || '').toLowerCase().includes(q)
+      || (d.data.dept || '').toLowerCase().includes(q);
+    if (hit) {
+      matchIds.add(d.data.id);
+      let p = d.parent;
+      while (p && p.data.id !== '__root__') { matchIds.add(p.data.id); p = p.parent; }
+    }
+  });
+  const directIds = new Set();
+  rootNode.descendants().forEach(d => {
+    if (d.data.id === '__root__') return;
+    const hit = d.data.name.toLowerCase().includes(q)
+      || (d.data.title || '').toLowerCase().includes(q)
+      || (d.data.dept || '').toLowerCase().includes(q);
+    if (hit) directIds.add(d.data.id);
+  });
+  gMain.selectAll('.node')
+    .classed('dimmed', d => !matchIds.has(d.data.id))
+    .classed('search-match', d => directIds.has(d.data.id));
+  gMain.selectAll('.link')
+    .classed('dimmed', d => !matchIds.has(d.target.data.id));
+}
+
+function clearSearch() {
+  document.getElementById('search').value = '';
+  applySearch('');
+}
+
+// =============================================================
+// TOOLTIP
+// =============================================================
+function showTip(event, d) {
+  const color = deptColor(d.data.dept);
+  const reports = (d.children || d._children || []).length;
+  document.getElementById('tooltip').innerHTML = `
+    <div class="tt-name">${d.data.name}</div>
+    <div class="tt-title">${d.data.title || ''}</div>
+    <span class="tt-dept" style="background:${color}">${d.data.dept || ''}</span>
+    ${d.data.email ? `<div class="tt-detail">&#9993; ${d.data.email}</div>` : ''}
+    ${d.data.location ? `<div class="tt-detail">&#128205; ${d.data.location}</div>` : ''}
+    ${reports > 0 ? `<div class="tt-reports">&#128101; ${reports} direct report${reports !== 1 ? 's' : ''} &mdash; click to ${d._children ? 'expand' : 'collapse'}</div>` : '<div class="tt-reports">&#128100; No direct reports recorded</div>'}
+  `;
+  document.getElementById('tooltip').style.display = 'block';
+}
+
+function moveTip(event) {
+  const tt = document.getElementById('tooltip');
+  tt.style.left = Math.min(event.clientX + 16, window.innerWidth - 280) + 'px';
+  tt.style.top = Math.max(event.clientY - 10, 10) + 'px';
+}
+
+function hideTip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// =============================================================
+// LEGEND
+// =============================================================
+function buildLegend() {
+  const depts = [...new Set(EMPLOYEES.map(e => e.dept).filter(Boolean))].sort();
+  const bar = document.getElementById('legend-bar');
+  depts.forEach(dept => {
+    const color = deptColor(dept);
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.style.color = color;
+    item.innerHTML = `<div class="legend-dot" style="background:${color}"></div>${dept}`;
+    item.title = `Filter by ${dept}`;
+    bar.appendChild(item);
+  });
+}
+
+// =============================================================
+// INIT
+// =============================================================
+buildLegend();
+initChart();
+window.addEventListener('resize', () => {
+  const container = document.getElementById('chart');
+  svg.attr('width', container.clientWidth).attr('height', container.clientHeight);
+});
+</script>
+</body>
+</html>
